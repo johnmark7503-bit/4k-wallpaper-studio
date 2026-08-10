@@ -19,7 +19,11 @@ type BatchUploadBody = {
   pinterestDescription?: string;
   width?: number;
   height?: number;
+  categoryId?: number;
+  collectionIds?: number[];
 };
+
+type RelationOption = { id: PayloadId; name: string; slug: string };
 
 function canUpload(user: unknown) {
   if (!user || typeof user !== "object") return false;
@@ -78,6 +82,35 @@ async function getNatureCategory(req: Parameters<Endpoint["handler"]>[0], cover:
   return created.id;
 }
 
+async function getRelationOptions(req: Parameters<Endpoint["handler"]>[0], collection: "categories" | "collections") {
+  const result = await req.payload.find({
+    collection,
+    limit: 100,
+    sort: "name",
+    overrideAccess: true,
+  });
+  return result.docs.map((document) => ({
+    id: document.id as PayloadId,
+    name: document.name,
+    slug: document.slug,
+  })) as RelationOption[];
+}
+
+export const batchUploadOptionsEndpoint: Endpoint = {
+  path: "/batch-upload",
+  method: "get",
+  handler: async (req) => {
+    if (!canUpload(req.user)) {
+      return Response.json({ error: "Administrator or Editor login required." }, { status: 403 });
+    }
+    const [categories, collections] = await Promise.all([
+      getRelationOptions(req, "categories"),
+      getRelationOptions(req, "collections"),
+    ]);
+    return Response.json({ categories, collections });
+  },
+};
+
 export const batchUploadEndpoint: Endpoint = {
   path: "/batch-upload",
   method: "post",
@@ -127,7 +160,13 @@ export const batchUploadEndpoint: Endpoint = {
       overrideAccess: true,
     });
 
-    const category = await getNatureCategory(req, media.id);
+    const categories = await getRelationOptions(req, "categories");
+    const collections = await getRelationOptions(req, "collections");
+    const requestedCategory = categories.find((item) => item.id === Number(body.categoryId));
+    const requestedCollections = Array.isArray(body.collectionIds)
+      ? collections.filter((item) => body.collectionIds?.map(Number).includes(item.id))
+      : [];
+    const category = requestedCategory?.id ?? await getNatureCategory(req, media.id);
     const tags = Array.isArray(body.tags)
       ? body.tags.map((tag) => text(tag, 50)).filter(Boolean).slice(0, 12)
       : [];
@@ -148,7 +187,7 @@ export const batchUploadEndpoint: Endpoint = {
           desktop4K: media.id,
         },
         category,
-        collections: [],
+        collections: requestedCollections.map((item) => item.id),
         tags: tags.map((tag) => ({ tag })),
         palette: text(body.palette, 100),
         resolutionLabel: height > width ? "Portrait HD" : "HD",
@@ -173,6 +212,26 @@ export const batchUploadEndpoint: Endpoint = {
       },
       overrideAccess: true,
     });
+
+    await Promise.all(requestedCollections.map(async (collection) => {
+      const existingCollection = await req.payload.findByID({
+        collection: "collections",
+        id: collection.id,
+        depth: 0,
+        overrideAccess: true,
+      });
+      const wallpaperIds = (existingCollection.wallpapers ?? []).map((item) =>
+        typeof item === "object" ? item.id : item,
+      );
+      if (!wallpaperIds.includes(wallpaper.id)) {
+        await req.payload.update({
+          collection: "collections",
+          id: collection.id,
+          data: { wallpapers: [...wallpaperIds, wallpaper.id] },
+          overrideAccess: true,
+        });
+      }
+    }));
 
     return Response.json({ ok: true, skipped: false, id: wallpaper.id, slug, title });
   },

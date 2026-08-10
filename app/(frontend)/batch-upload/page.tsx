@@ -1,6 +1,8 @@
 "use client";
 
-import { ChangeEvent, useMemo, useState } from "react";
+import { ChangeEvent, useEffect, useMemo, useState } from "react";
+
+type RelationOption = { id: number; name: string; slug: string };
 
 type SeoPreset = {
   title: string;
@@ -22,6 +24,8 @@ type UploadItem = SeoPreset & {
   preview: string;
   status: "ready" | "uploading" | "done" | "skipped" | "error";
   message?: string;
+  categoryId?: number;
+  collectionIds?: number[];
 };
 
 const PRESETS: Record<number, SeoPreset> = {
@@ -208,11 +212,37 @@ function toBase64(blob: Blob) {
 export default function BatchUploadPage() {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [running, setRunning] = useState(false);
+  const [categories, setCategories] = useState<RelationOption[]>([]);
+  const [collections, setCollections] = useState<RelationOption[]>([]);
+  const [defaultCategoryId, setDefaultCategoryId] = useState<number>();
+  const [defaultCollectionIds, setDefaultCollectionIds] = useState<number[]>([]);
+  const [optionsError, setOptionsError] = useState("");
   const complete = useMemo(() => items.filter((item) => item.status === "done" || item.status === "skipped").length, [items]);
+
+  useEffect(() => {
+    fetch("/cms-api/batch-upload", { credentials: "include" })
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not load categories and collections.");
+        setCategories(result.categories ?? []);
+        setCollections(result.collections ?? []);
+        const nature = (result.categories ?? []).find((item: RelationOption) => item.slug === "nature");
+        if (nature) setDefaultCategoryId(nature.id);
+      })
+      .catch((error) => setOptionsError(error instanceof Error ? error.message : "Could not load categories and collections."));
+  }, []);
 
   function selectFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).slice(0, 20);
-    setItems(files.map((file) => ({ ...presetFor(file), id: `${file.name}-${file.lastModified}`, file, preview: URL.createObjectURL(file), status: "ready" })));
+    setItems(files.map((file) => ({ ...presetFor(file), id: `${file.name}-${file.lastModified}`, file, preview: URL.createObjectURL(file), status: "ready", categoryId: defaultCategoryId, collectionIds: defaultCollectionIds })));
+  }
+
+  function applyDefaults(categoryId: number | undefined, collectionIds: number[]) {
+    setItems((current) => current.map((item) => item.status === "done" ? item : { ...item, categoryId, collectionIds }));
+  }
+
+  function updateRelations(id: string, categoryId: number | undefined, collectionIds: number[]) {
+    setItems((current) => current.map((item) => item.id === id ? { ...item, categoryId, collectionIds } : item));
   }
 
   function updateTitle(id: string, title: string) {
@@ -249,7 +279,25 @@ export default function BatchUploadPage() {
       <section style={{ width: "min(1120px, 100%)", margin: "0 auto" }}>
         <p className="eyebrow">Administrator utility</p>
         <h1 style={{ marginTop: 12, fontSize: "clamp(34px, 5vw, 58px)", letterSpacing: "-0.04em" }}>Batch upload wallpapers</h1>
-        <p style={{ marginTop: 14, maxWidth: 760, color: "#9fb0bb", lineHeight: 1.7 }}>Select up to 20 original images. Files are optimized in your browser, uploaded one at a time, assigned to Nature, published, and completed with search and Pinterest SEO.</p>
+        <p style={{ marginTop: 14, maxWidth: 760, color: "#9fb0bb", lineHeight: 1.7 }}>Select up to 20 original images, choose their category and collections, then publish them with complete search and Pinterest SEO.</p>
+
+        <div style={{ marginTop: 26, padding: 18, border: "1px solid #20313b", borderRadius: 16, background: "#09131a", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
+          <label style={{ color: "#9fb0bb", fontSize: 13, fontWeight: 700 }}>
+            Category — apply to all
+            <select value={defaultCategoryId ?? ""} onChange={(event) => { const value = event.target.value ? Number(event.target.value) : undefined; setDefaultCategoryId(value); applyDefaults(value, defaultCollectionIds); }} style={{ marginTop: 8, width: "100%", border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 11 }}>
+              <option value="">Select a category</option>
+              {categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+          </label>
+          <label style={{ color: "#9fb0bb", fontSize: 13, fontWeight: 700 }}>
+            Collections — apply to all
+            <select multiple value={defaultCollectionIds.map(String)} onChange={(event) => { const values = Array.from(event.target.selectedOptions, (option) => Number(option.value)); setDefaultCollectionIds(values); applyDefaults(defaultCategoryId, values); }} style={{ marginTop: 8, width: "100%", minHeight: 92, border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 11 }}>
+              {collections.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+            </select>
+            <span style={{ display: "block", marginTop: 6, color: "#748893", fontWeight: 400 }}>Ctrl/Cmd dabakar multiple collections select karein.</span>
+          </label>
+        </div>
+        {optionsError && <p style={{ marginTop: 12, color: "#ff8c8c" }}>{optionsError}</p>}
 
         <div style={{ marginTop: 28, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
           <label style={{ display: "inline-flex", cursor: "pointer", padding: "13px 18px", borderRadius: 999, background: "#e6ff45", color: "#071017", fontWeight: 800 }}>
@@ -268,6 +316,19 @@ export default function BatchUploadPage() {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={item.preview} alt="Selected wallpaper preview" style={{ width: "100%", aspectRatio: "9 / 16", objectFit: "cover", display: "block" }} />
               <div style={{ padding: 16 }}>
+                <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
+                  <label style={{ color: "#8fa3af", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" }}>Category
+                    <select value={item.categoryId ?? ""} disabled={running || item.status === "done"} onChange={(event) => updateRelations(item.id, event.target.value ? Number(event.target.value) : undefined, item.collectionIds ?? [])} style={{ marginTop: 8, width: "100%", border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 10 }}>
+                      <option value="">Select a category</option>
+                      {categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                    </select>
+                  </label>
+                  <label style={{ color: "#8fa3af", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" }}>Collections
+                    <select multiple value={(item.collectionIds ?? []).map(String)} disabled={running || item.status === "done"} onChange={(event) => updateRelations(item.id, item.categoryId, Array.from(event.target.selectedOptions, (option) => Number(option.value)))} style={{ marginTop: 8, width: "100%", minHeight: 78, border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 10 }}>
+                      {collections.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+                    </select>
+                  </label>
+                </div>
                 <label style={{ display: "block", color: "#8fa3af", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" }}>SEO title</label>
                 <textarea value={item.title} disabled={running || item.status === "done"} onChange={(event) => updateTitle(item.id, event.target.value)} rows={3} style={{ marginTop: 8, width: "100%", resize: "vertical", border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 11, lineHeight: 1.4 }} />
                 <p style={{ marginTop: 10, fontSize: 12, color: "#748893", overflowWrap: "anywhere" }}>/wallpapers/{item.slug}</p>
