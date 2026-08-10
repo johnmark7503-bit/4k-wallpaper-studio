@@ -1,0 +1,18 @@
+:root {
+  --theme-elevation-0: #05090d;
+  --theme-elevation-50: #091117;
+  --theme-elevation-100: #0d1820;
+  --theme-elevation-150: #13232d;
+  --theme-elevation-800: #dcebee;
+  --theme-elevation-900: #eff8fa;
+  --theme-elevation-1000: #ffffff;
+  --theme-success-500: #05d9f4;
+}
+
+.template-default {
+  --theme-success-500: #05d9f4;
+}
+
+.nav__brand img {
+  filter: hue-rotate(135deg) saturate(1.4);
+}
