@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { revalidatePath } from "next/cache";
 import type { Endpoint } from "payload";
 
 type PayloadId = number;
@@ -56,6 +58,52 @@ async function findBySlug(req: Parameters<Endpoint["handler"]>[0], collection: s
     overrideAccess: true,
   });
   return result.docs[0] as { id: PayloadId; title?: string } | undefined;
+}
+
+async function availableSlug(req: Parameters<Endpoint["handler"]>[0], requested: string) {
+  if (!await findBySlug(req, "wallpapers", requested)) return requested;
+  for (let suffix = 2; suffix <= 100; suffix += 1) {
+    const candidate = `${requested}-${suffix}`;
+    if (!await findBySlug(req, "wallpapers", candidate)) return candidate;
+  }
+  return `${requested}-${Date.now().toString(36)}`;
+}
+
+async function findUploadedMedia(req: Parameters<Endpoint["handler"]>[0], fingerprint: string) {
+  const result = await req.payload.find({
+    collection: "media",
+    where: { sourceNote: { contains: `sha256:${fingerprint}` } },
+    limit: 1,
+    overrideAccess: true,
+  });
+  return result.docs[0] as { id: PayloadId; url?: string | null } | undefined;
+}
+
+async function findWallpaperByMedia(req: Parameters<Endpoint["handler"]>[0], mediaId: PayloadId) {
+  const result = await req.payload.find({
+    collection: "wallpapers",
+    where: { previewImage: { equals: mediaId } },
+    limit: 1,
+    depth: 0,
+    overrideAccess: true,
+  });
+  return result.docs[0] as { id: PayloadId; slug: string; title: string } | undefined;
+}
+
+async function verifyPublishedWallpaper(
+  req: Parameters<Endpoint["handler"]>[0],
+  wallpaperId: PayloadId,
+  mediaId: PayloadId,
+) {
+  const [wallpaper, media] = await Promise.all([
+    req.payload.findByID({ collection: "wallpapers", id: wallpaperId, depth: 0, overrideAccess: true }),
+    req.payload.findByID({ collection: "media", id: mediaId, depth: 0, overrideAccess: true }),
+  ]);
+  const previewId = typeof wallpaper.previewImage === "object" ? wallpaper.previewImage?.id : wallpaper.previewImage;
+  return {
+    verified: wallpaper._status === "published" && Number(previewId) === Number(mediaId) && Boolean(media.url),
+    mediaUrl: media.url,
+  };
 }
 
 async function getNatureCategory(req: Parameters<Endpoint["handler"]>[0], cover: PayloadId) {
@@ -123,22 +171,17 @@ export const batchUploadEndpoint: Endpoint = {
     if (!body) return Response.json({ error: "Invalid upload request." }, { status: 400 });
 
     const title = text(body.title, 120);
-    const slug = cleanSlug(text(body.slug || title, 140));
+    const requestedSlug = cleanSlug(text(body.slug || title, 140));
     const description = text(body.description, 600);
     const alt = text(body.alt || title, 180);
     const mimeType = text(body.mimeType, 80) || "image/webp";
-    const originalName = text(body.filename, 180) || `${slug || "wallpaper"}.webp`;
+    const originalName = text(body.filename, 180) || `${requestedSlug || "wallpaper"}.webp`;
 
-    if (!title || !slug || !description || !body.base64) {
+    if (!title || !requestedSlug || !description || !body.base64) {
       return Response.json({ error: "Title, slug, description and image are required." }, { status: 400 });
     }
     if (!mimeType.startsWith("image/")) {
       return Response.json({ error: "Only image files are accepted." }, { status: 415 });
-    }
-
-    const existing = await findBySlug(req, "wallpapers", slug);
-    if (existing) {
-      return Response.json({ ok: true, skipped: true, slug, title: existing.title ?? title });
     }
 
     const bytes = decodeBase64(body.base64);
@@ -146,15 +189,39 @@ export const batchUploadEndpoint: Endpoint = {
       return Response.json({ error: "Optimized image must be smaller than 4 MB." }, { status: 413 });
     }
 
+    const fingerprint = createHash("sha256").update(bytes).digest("hex");
+    const existingMedia = await findUploadedMedia(req, fingerprint);
+    if (existingMedia) {
+      const existingWallpaper = await findWallpaperByMedia(req, existingMedia.id);
+      if (existingWallpaper) {
+        const verification = await verifyPublishedWallpaper(req, existingWallpaper.id, existingMedia.id);
+        if (!verification.verified) {
+          return Response.json({ error: "A duplicate database record exists, but its media file is not available. Repair or delete that record, then retry." }, { status: 409 });
+        }
+        return Response.json({
+          ok: true,
+          skipped: true,
+          verified: true,
+          id: existingWallpaper.id,
+          slug: existingWallpaper.slug,
+          title: existingWallpaper.title,
+          url: `/wallpapers/${existingWallpaper.slug}`,
+          mediaUrl: verification.mediaUrl,
+          message: "This exact image is already published.",
+        });
+      }
+    }
+
+    const slug = await availableSlug(req, requestedSlug);
     const uploadName = `${slug}.${mimeType.includes("png") ? "png" : mimeType.includes("jpeg") ? "jpg" : "webp"}`;
-    const media = await req.payload.create({
+    const media = existingMedia ?? await req.payload.create({
       collection: "media",
       data: {
         alt,
         kind: "wallpaper",
         caption: description,
         copyrightSafe: true,
-        sourceNote: `Original artwork batch uploaded as ${originalName}.`,
+        sourceNote: `Original artwork batch uploaded as ${originalName}. sha256:${fingerprint}`,
       },
       file: { data: bytes, mimetype: mimeType, name: uploadName, size: bytes.length },
       overrideAccess: true,
@@ -233,6 +300,23 @@ export const batchUploadEndpoint: Endpoint = {
       }
     }));
 
-    return Response.json({ ok: true, skipped: false, id: wallpaper.id, slug, title });
+    const verification = await verifyPublishedWallpaper(req, wallpaper.id, media.id);
+    if (!verification.verified) {
+      return Response.json({ error: "The CMS record was created, but the media file could not be verified. Nothing has been counted as uploaded." }, { status: 500 });
+    }
+    revalidatePath("/", "layout");
+
+    return Response.json({
+      ok: true,
+      skipped: false,
+      verified: true,
+      id: wallpaper.id,
+      slug,
+      requestedSlug,
+      title,
+      url: `/wallpapers/${slug}`,
+      mediaUrl: verification.mediaUrl,
+      message: slug === requestedSlug ? "Published and verified." : `Published with unique URL ${slug}.`,
+    });
   },
 };
