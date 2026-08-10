@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { Icon } from "../../_components/icons";
 import { PageShell } from "../../_components/page-shell";
 import { SaveButton } from "../../_components/save-button";
+import { ShareButton } from "../../_components/share-button";
 import { WallpaperCard } from "../../_components/wallpaper-card";
 import { WallpaperDownloadOptions } from "../../_components/wallpaper-download-options";
 import { getWallpaperData, getWallpapersData } from "../../_data/cms-data";
@@ -76,6 +77,7 @@ export default async function WallpaperPage({ params }: WallpaperPageProps) {
             <WallpaperDownloadOptions downloadSrc={wallpaper.downloadSrc} downloadSources={wallpaper.downloadSources} slug={wallpaper.slug} />
             <div className="wallpaperActions wallpaperSecondaryActions">
               <SaveButton slug={wallpaper.slug} />
+              <ShareButton slug={wallpaper.slug} title={wallpaper.title} />
             </div>
             <small className="downloadNote">High-resolution WebP · Free for personal device use</small>
 

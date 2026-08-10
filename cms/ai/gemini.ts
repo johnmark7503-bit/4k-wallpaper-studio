@@ -18,6 +18,7 @@ type AISettingsDocument = {
   enabled?: boolean | null;
   model?: string | null;
   imageSize?: "1K" | "2K" | "4K" | null;
+  dailyLimit?: number | null;
 };
 
 export type WallpaperSEO = {
@@ -124,6 +125,15 @@ export async function getAIStatus(payload: Payload) {
   };
 }
 
+export async function getPublicAISettings(payload: Payload) {
+  const settings = await getSettings(payload);
+  const status = await getAIStatus(payload);
+  return {
+    ...status,
+    dailyLimit: Math.max(1, Math.min(20, Number(settings.dailyLimit) || 3)),
+  };
+}
+
 async function getAPIKey(payload: Payload) {
   const settings = await getSettings(payload);
   if (settings.enabled === false) throw new Error("AI is disabled in AI wallpaper settings.");
@@ -193,6 +203,39 @@ export async function generateWallpaperImage(payload: Payload, prompt: string, a
   });
   const imagePart = result.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data);
   if (!imagePart?.inlineData?.data) throw new Error("Google AI did not return an image. Try a clearer prompt.");
+  return { base64: imagePart.inlineData.data, mimeType: imagePart.inlineData.mimeType ?? "image/png" };
+}
+
+export async function generatePersonalizedNameArtwork(
+  payload: Payload,
+  input: { name: string; artDirection: string; variationSeed: string },
+) {
+  const settings = await getAPIKey(payload);
+  const systemInstruction = [
+    "You are the lead artist for a premium personalized wallpaper studio.",
+    "Create a genuinely original visual world for each request; never reuse a fixed template or merely swap colors.",
+    "Treat the supplied name as creative inspiration for mood, rhythm, lighting, materials and composition.",
+    "The artwork must remain elegant, cinematic, mobile-first and commercially safe.",
+    "Do not draw any text, letters, initials, logos, signatures, watermarks, people, faces, brands or copyrighted characters.",
+    "Leave calm, high-contrast negative space around the center because the studio adds the exact name afterward.",
+  ].join(" ");
+  const prompt = [
+    `Personalization name: ${JSON.stringify(input.name)}.`,
+    `Premium art direction: ${input.artDirection}.`,
+    `Unique variation seed: ${input.variationSeed}.`,
+    "Create one polished vertical 9:16 wallpaper background with layered depth, refined detail and a distinct visual identity.",
+    "Keep key visual interest around the outer thirds and preserve a clean central title-safe area.",
+  ].join(" ");
+  const result = await requestGemini(payload, IMAGE_MODEL, {
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    generationConfig: {
+      responseModalities: ["TEXT", "IMAGE"],
+      imageConfig: { aspectRatio: "9:16", imageSize: settings.imageSize },
+    },
+  });
+  const imagePart = result.candidates?.[0]?.content?.parts?.find((part) => part.inlineData?.data);
+  if (!imagePart?.inlineData?.data) throw new Error("Google AI did not return a name wallpaper. Please try again.");
   return { base64: imagePart.inlineData.data, mimeType: imagePart.inlineData.mimeType ?? "image/png" };
 }
 

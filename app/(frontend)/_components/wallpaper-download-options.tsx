@@ -1,4 +1,7 @@
+"use client";
+
 import { Icon, type IconName } from "./icons";
+import { trackFirebaseEvent } from "./firebase-analytics";
 
 const deviceDownloads = [
   {
@@ -89,6 +92,10 @@ export function WallpaperDownloadOptions({
               className="deviceDownloadCard"
               aria-label={`Download ${device.label} wallpaper, ${device.dimensions}`}
               key={device.key}
+              onClick={() => trackFirebaseEvent("wallpaper_download", {
+                wallpaper_slug: slug,
+                screen_format: device.key,
+              })}
             >
               <span className="deviceIcon"><Icon name={device.icon} size={21} /></span>
               <span className="deviceDownloadCopy">

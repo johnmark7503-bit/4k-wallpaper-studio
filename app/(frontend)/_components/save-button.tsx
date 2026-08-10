@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { Icon } from "./icons";
+import { trackFirebaseEvent } from "./firebase-analytics";
 
 const storageKey = "4k-wallpaper-studio-saved:v1";
 
@@ -41,6 +42,12 @@ export function SaveButton({ slug, compact = false }: { slug: string; compact?: 
       return;
     }
     window.dispatchEvent(new CustomEvent("wallpaper-saved-change"));
+    trackFirebaseEvent(saved ? "wallpaper_unsave" : "wallpaper_save", {
+      wallpaper_slug: slug,
+    });
+    trackFirebaseEvent(saved ? "wallpaper_unlike" : "wallpaper_like", {
+      wallpaper_slug: slug,
+    });
   }
 
   return (

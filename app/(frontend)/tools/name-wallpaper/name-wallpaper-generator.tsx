@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { trackFirebaseEvent } from "../../_components/firebase-analytics";
 
 const wallpaperFormats = {
   phone: { label: "Phone", dimensions: "1440 × 3200", width: 1440, height: 3200 },
@@ -33,6 +34,7 @@ type QuotaPayload = {
 type GenerationPayload = QuotaPayload & {
   image?: string;
   theme?: WallpaperTheme;
+  error?: string;
 };
 
 const sampleTheme: WallpaperTheme = {
@@ -262,6 +264,7 @@ export function NameWallpaperGenerator() {
   const [backgroundSource, setBackgroundSource] = useState(sampleBackground);
   const [theme, setTheme] = useState<WallpaperTheme>(sampleTheme);
   const [generatedForName, setGeneratedForName] = useState("");
+  const [dailyLimit, setDailyLimit] = useState(3);
   const [remaining, setRemaining] = useState<number | null>(null);
   const [isConfigured, setIsConfigured] = useState<boolean | null>(null);
   const [resetAt, setResetAt] = useState("");
@@ -300,7 +303,7 @@ export function NameWallpaperGenerator() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void fetch("/api/name-wallpaper", {
+    void fetch("/cms-api/ai/name-wallpaper", {
       cache: "no-store",
       credentials: "same-origin",
       signal: controller.signal,
@@ -309,6 +312,7 @@ export function NameWallpaperGenerator() {
       .then(({ response, body }) => {
         if (!response.ok) throw new Error(body.message || "Quota unavailable");
         if (typeof body.configured === "boolean") setIsConfigured(body.configured);
+        if (typeof body.limit === "number") setDailyLimit(body.limit);
         if (typeof body.remaining === "number") setRemaining(body.remaining);
         if (body.resetAt) setResetAt(body.resetAt);
         if (body.configured === false) {
@@ -343,7 +347,7 @@ export function NameWallpaperGenerator() {
       return;
     }
     if (remaining === 0) {
-      setStatusMessage("You have used all 3 free AI wallpapers for today.");
+      setStatusMessage(`You have used all ${dailyLimit} free AI wallpapers for today.`);
       return;
     }
 
@@ -351,7 +355,8 @@ export function NameWallpaperGenerator() {
     setGenerationStage(0);
     setStatusMessage("");
     try {
-      const response = await fetch("/api/name-wallpaper", {
+      trackFirebaseEvent("name_wallpaper_generate", { screen_format: format });
+      const response = await fetch("/cms-api/ai/name-wallpaper", {
         method: "POST",
         credentials: "same-origin",
         headers: { "Content-Type": "application/json" },
@@ -359,10 +364,11 @@ export function NameWallpaperGenerator() {
       });
       const body = (await response.json()) as GenerationPayload;
       if (typeof body.configured === "boolean") setIsConfigured(body.configured);
+      if (typeof body.limit === "number") setDailyLimit(body.limit);
       if (typeof body.remaining === "number") setRemaining(body.remaining);
       if (body.resetAt) setResetAt(body.resetAt);
       if (!response.ok || !body.image || !body.theme) {
-        throw new Error(body.message || "The AI studio could not finish this design.");
+        throw new Error(body.message || body.error || "The AI studio could not finish this design.");
       }
 
       const imageBlob = await (await fetch(body.image)).blob();
@@ -375,8 +381,10 @@ export function NameWallpaperGenerator() {
       setBackgroundSource(nextObjectUrl);
       setTheme(body.theme);
       setGeneratedForName(requestName);
+      trackFirebaseEvent("name_wallpaper_success", { screen_format: format, vibe: body.theme.id });
       setStatusMessage(`${body.theme.label} was created for ${requestName}. Choose a screen and download it.`);
     } catch (error) {
+      trackFirebaseEvent("name_wallpaper_failed", { screen_format: format });
       setStatusMessage(error instanceof Error ? error.message : "The AI studio could not finish this design.");
     } finally {
       setIsGenerating(false);
@@ -416,6 +424,7 @@ export function NameWallpaperGenerator() {
       link.remove();
       window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1200);
       setStatusMessage(`${selectedFormat.label} wallpaper downloaded. Other sizes remain free.`);
+      trackFirebaseEvent("name_wallpaper_download", { screen_format: format, vibe: theme.id });
     } catch (error) {
       setStatusMessage(error instanceof Error ? error.message : "Wallpaper could not be prepared.");
     } finally {
@@ -446,7 +455,7 @@ export function NameWallpaperGenerator() {
               ? "Checking…"
               : isConfigured === false
                 ? "Setup pending"
-                : `${remaining} of 3 free today`}
+                : `${remaining} of ${dailyLimit} free today`}
           </strong>
         </div>
 
@@ -472,7 +481,7 @@ export function NameWallpaperGenerator() {
           <span aria-hidden="true">✦</span>
           <div>
             <strong>One name in. One original design out.</strong>
-            <p>Gemini paints only the artwork. Your name is added separately in your browser so the spelling stays sharp and correct.</p>
+            <p>Gemini turns your name into a unique premium visual world. The studio adds the exact spelling afterward so every result stays sharp and correct.</p>
           </div>
         </div>
 
@@ -534,7 +543,7 @@ export function NameWallpaperGenerator() {
         </button>
 
         <div className="aiLimitNote">
-          <span>3 successful generations daily</span>
+          <span>{dailyLimit} successful generations daily</span>
           <span>Resets {resetLabel}</span>
           <span>Downloads never use quota</span>
         </div>

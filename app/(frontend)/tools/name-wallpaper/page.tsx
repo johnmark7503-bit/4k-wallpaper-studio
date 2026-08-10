@@ -14,7 +14,7 @@ export default function NameWallpaperPage() {
       <PageHero
         eyebrow="Gemini personal wallpaper studio"
         title="Your name. One original world."
-        description="Type only your name. Gemini creates a premium original background matched to its visual rhythm, then the studio adds crisp typography for every screen."
+        description="Type only your name. Gemini transforms it into a different premium visual world on every generation, then the studio adds perfectly spelled typography for every screen."
       />
       <section className="contentShell toolWorkspaceSection">
         <NameWallpaperGenerator />

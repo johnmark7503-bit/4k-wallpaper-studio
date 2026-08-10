@@ -1,10 +1,13 @@
 import type { Endpoint } from "payload";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import {
   analyzeWallpaper,
   generateBlogDraft,
   generateNewsletterDraft,
+  generatePersonalizedNameArtwork,
   generateWallpaperImage,
   getAIStatus,
+  getPublicAISettings,
 } from "../ai/gemini";
 
 type EndpointRequest = Parameters<Endpoint["handler"]>[0];
@@ -32,6 +35,110 @@ function cleanText(value: unknown, max = 2_000) {
 function errorResponse(error: unknown) {
   return Response.json({ error: error instanceof Error ? error.message : "AI request failed." }, { status: 500 });
 }
+
+const NAME_QUOTA_COOKIE = "ws_name_ai_quota";
+const NAME_VIBE_COOKIE = "ws_name_ai_vibe";
+const nameArtDirections = [
+  { id: "obsidian-gold", label: "Obsidian Gold", description: "Sculpted darkness · molten gold", accent: "#f6c65b", textStart: "#fff4bd", textEnd: "#d79121", typography: "signature", prompt: "deep obsidian mineral layers, fine molten-gold veins, couture editorial lighting, quiet luxury" },
+  { id: "aurora-glass", label: "Aurora Glass", description: "Luminous calm · arctic cyan", accent: "#66f3ff", textStart: "#f8feff", textEnd: "#72dbea", typography: "modern", prompt: "translucent arctic glass, flowing cyan aurora, midnight navy depth, pristine reflections" },
+  { id: "royal-nebula", label: "Royal Nebula", description: "Cosmic depth · regal violet", accent: "#b28cff", textStart: "#ffffff", textEnd: "#bda8ff", typography: "bold", prompt: "velvety violet nebula, silver orbital dust, sculptural cosmic light, regal futuristic atmosphere" },
+  { id: "emerald-sanctuary", label: "Emerald Sanctuary", description: "Living calm · deep emerald", accent: "#72e7b5", textStart: "#f4fff9", textEnd: "#86d9b4", typography: "modern", prompt: "abstract emerald sanctuary, botanical mist, dark glass foliage, soft bioluminescent light" },
+  { id: "crimson-forge", label: "Crimson Forge", description: "Bold energy · ruby ember", accent: "#ff786f", textStart: "#fff4ee", textEnd: "#ef765d", typography: "bold", prompt: "black volcanic glass, controlled crimson embers, cinematic smoke ribbons, powerful luxury energy" },
+  { id: "liquid-chrome", label: "Liquid Chrome", description: "Precise focus · silver light", accent: "#c7e8ef", textStart: "#ffffff", textEnd: "#adc5cc", typography: "modern", prompt: "liquid chrome architecture, graphite shadows, precise reflections, minimalist industrial sculpture" },
+  { id: "rose-celestine", label: "Rose Celestine", description: "Soft prestige · blush crystal", accent: "#ffb5d2", textStart: "#fff8fb", textEnd: "#efa7c3", typography: "signature", prompt: "smoky rose crystal caverns, pearl highlights, blush light through dark glass, refined fashion mood" },
+  { id: "sapphire-tide", label: "Sapphire Tide", description: "Deep motion · ocean blue", accent: "#6eb8ff", textStart: "#f3f9ff", textEnd: "#73b6f2", typography: "bold", prompt: "translucent sapphire waves, midnight ocean depth, elegant caustic light, cinematic underwater calm" },
+] as const;
+
+function cleanName(value: unknown) {
+  if (typeof value !== "string") return "";
+  const name = value.normalize("NFKC").trim().replace(/\s+/g, " ");
+  return name.length <= 20 && /^[\p{L}\p{M}\p{N} .'-]+$/u.test(name) ? name : "";
+}
+
+function cookieValue(req: EndpointRequest, name: string) {
+  const header = req.headers.get("cookie") ?? "";
+  for (const item of header.split(";")) {
+    const [key, ...parts] = item.trim().split("=");
+    if (key === name) return decodeURIComponent(parts.join("="));
+  }
+  return "";
+}
+
+function quotaSecret() {
+  return process.env.PAYLOAD_SECRET ?? "";
+}
+
+function signQuota(value: string) {
+  return createHmac("sha256", quotaSecret()).update(value).digest("base64url");
+}
+
+function todayInRiyadh() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Riyadh" }).format(new Date());
+}
+
+function readQuota(req: EndpointRequest) {
+  const raw = cookieValue(req, NAME_QUOTA_COOKIE);
+  const [date, usedValue, signature] = raw.split(".");
+  const signed = `${date}.${usedValue}`;
+  const expected = signQuota(signed);
+  const valid = Boolean(signature) && expected.length === signature.length && timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  return valid && date === todayInRiyadh() ? Math.max(0, Number.parseInt(usedValue, 10) || 0) : 0;
+}
+
+function quotaCookie(used: number) {
+  const value = `${todayInRiyadh()}.${used}`;
+  return `${NAME_QUOTA_COOKIE}=${encodeURIComponent(`${value}.${signQuota(value)}`)}; Path=/; Max-Age=172800; HttpOnly; Secure; SameSite=Lax`;
+}
+
+function chooseNameVibe(req: EndpointRequest, name: string) {
+  const previous = Number.parseInt(cookieValue(req, NAME_VIBE_COOKIE), 10);
+  const entropy = randomBytes(4).readUInt32BE(0);
+  let index = entropy % nameArtDirections.length;
+  if (Number.isFinite(previous) && index === previous) index = (index + 1 + (name.codePointAt(0) ?? 0)) % nameArtDirections.length;
+  return { index, vibe: nameArtDirections[index] };
+}
+
+function vibeCookie(index: number) {
+  return `${NAME_VIBE_COOKIE}=${index}; Path=/; Max-Age=31536000; HttpOnly; Secure; SameSite=Lax`;
+}
+
+export const publicNameWallpaperStatusEndpoint: Endpoint = {
+  path: "/ai/name-wallpaper",
+  method: "get",
+  handler: async (req) => {
+    try {
+      const settings = await getPublicAISettings(req.payload);
+      const used = readQuota(req);
+      return Response.json({ provider: "gemini", configured: settings.configured && settings.enabled, limit: settings.dailyLimit, remaining: Math.max(0, settings.dailyLimit - used) });
+    } catch (error) {
+      return errorResponse(error);
+    }
+  },
+};
+
+export const publicNameWallpaperGenerateEndpoint: Endpoint = {
+  path: "/ai/name-wallpaper",
+  method: "post",
+  handler: async (req) => {
+    try {
+      const body = await req.json?.() as { name?: unknown };
+      const name = cleanName(body?.name);
+      if (!name) return Response.json({ error: "Enter 1–20 valid letters or numbers." }, { status: 400 });
+      const settings = await getPublicAISettings(req.payload);
+      if (!settings.configured || !settings.enabled) return Response.json({ error: "AI generation is waiting for secure Admin setup." }, { status: 503 });
+      const used = readQuota(req);
+      if (used >= settings.dailyLimit) return Response.json({ error: `You have used all ${settings.dailyLimit} free AI wallpapers for today.`, remaining: 0, limit: settings.dailyLimit }, { status: 429 });
+      const { index, vibe } = chooseNameVibe(req, name);
+      const image = await generatePersonalizedNameArtwork(req.payload, { name, artDirection: vibe.prompt, variationSeed: randomBytes(12).toString("hex") });
+      const headers = new Headers({ "Cache-Control": "no-store" });
+      headers.append("Set-Cookie", quotaCookie(used + 1));
+      headers.append("Set-Cookie", vibeCookie(index));
+      return Response.json({ ok: true, provider: "gemini", image: `data:${image.mimeType};base64,${image.base64}`, theme: { id: vibe.id, label: vibe.label, description: vibe.description, accent: vibe.accent, textStart: vibe.textStart, textEnd: vibe.textEnd, typography: vibe.typography }, limit: settings.dailyLimit, remaining: Math.max(0, settings.dailyLimit - used - 1) }, { headers });
+    } catch (error) {
+      return errorResponse(error);
+    }
+  },
+};
 
 function lexicalBody(sections: Array<{ heading: string; paragraphs: string[] }>) {
   const children = sections.flatMap((section) => [
@@ -181,6 +288,8 @@ export const aiNewsletterEndpoint: Endpoint = {
 };
 
 export const aiEndpoints = [
+  publicNameWallpaperStatusEndpoint,
+  publicNameWallpaperGenerateEndpoint,
   aiStatusEndpoint,
   aiAnalyzeImageEndpoint,
   aiGenerateWallpaperEndpoint,

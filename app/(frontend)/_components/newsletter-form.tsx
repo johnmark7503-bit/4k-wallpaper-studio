@@ -3,6 +3,7 @@
 import type { FormEvent } from "react";
 import { useState } from "react";
 import { Icon } from "./icons";
+import { trackFirebaseEvent } from "./firebase-analytics";
 
 export function NewsletterForm() {
   const [message, setMessage] = useState("");
@@ -24,9 +25,15 @@ export function NewsletterForm() {
       });
       const payload = (await result.json()) as { message?: string };
       setMessage(payload.message ?? "Signup could not be completed.");
-      if (result.ok) form.reset();
+      if (result.ok) {
+        form.reset();
+        trackFirebaseEvent("newsletter_signup", { status: "success" });
+      } else {
+        trackFirebaseEvent("newsletter_signup", { status: "failed" });
+      }
     } catch {
       setMessage("Signup is temporarily unavailable. Please try again shortly.");
+      trackFirebaseEvent("newsletter_signup", { status: "error" });
     } finally {
       setIsSubmitting(false);
     }

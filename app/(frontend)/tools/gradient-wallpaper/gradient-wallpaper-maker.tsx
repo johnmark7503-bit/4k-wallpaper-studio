@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { trackFirebaseEvent } from "../../_components/firebase-analytics";
 
 const formats = {
   desktop: { label: "Desktop 4K", width: 3840, height: 2160 },
@@ -55,6 +56,7 @@ export function GradientWallpaperMaker() {
       link.click();
       URL.revokeObjectURL(link.href);
       setMessage("Your high-resolution gradient is ready.");
+      trackFirebaseEvent("gradient_wallpaper_download", { screen_format: format });
     }, "image/png");
   }
 

@@ -1045,6 +1045,8 @@ export interface AdvertisementSetting {
   createdAt?: string | null;
 }
 /**
+ * Connect Google AI Studio once, then use AI for wallpaper generation, batch SEO, blog drafts and newsletters.
+ *
  * This interface was referenced by `Config`'s JSON-Schema
  * via the `definition` "ai-settings".
  */
@@ -1052,11 +1054,14 @@ export interface AiSetting {
   id: number;
   enabled?: boolean | null;
   provider?: 'gemini' | null;
+  /**
+   * Paste a key from Google AI Studio. It is encrypted before database storage and is never returned to the browser. Leave the masked value unchanged to keep the current key.
+   */
   model?: string | null;
   imageSize?: ('1K' | '2K' | '4K') | null;
   dailyLimit?: number | null;
   /**
-   * Gemini API key remains a server environment variable and is never stored as plain text in CMS content.
+   * AI image analysis uses Gemini 3.6 Flash. Wallpaper generation uses Gemini 3.1 Flash Image.
    */
   credentialStatus?: string | null;
   updatedAt?: string | null;
