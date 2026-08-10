@@ -158,7 +158,10 @@ export const seedDemoEndpoint: Endpoint = {
             desktop4K: requiredId(media.get(`/downloads/${base}-4k.webp`), `${base} 4K`),
           },
           category: requiredId(categoryIds.get(wallpaper.categorySlug), wallpaper.categorySlug),
-          collections: wallpaper.collectionSlugs.map((slug) => requiredId(collectionIds.get(slug), slug)),
+          collections: wallpaper.collectionSlugs.flatMap((slug) => {
+            const id = collectionIds.get(slug);
+            return id === undefined ? [] : [id];
+          }),
           tags: wallpaper.tags.map((tag) => ({ tag })),
           palette: wallpaper.palette,
           resolutionLabel: wallpaper.resolution,
