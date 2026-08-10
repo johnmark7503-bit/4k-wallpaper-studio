@@ -18,6 +18,7 @@ import { NewsletterSubscribers } from "./cms/collections/NewsletterSubscribers";
 import { Pages } from "./cms/collections/Pages";
 import { Users } from "./cms/collections/Users";
 import { Wallpapers } from "./cms/collections/Wallpapers";
+import { batchUploadEndpoint } from "./cms/endpoints/batchUpload";
 import { seedDemoEndpoint } from "./cms/endpoints/seedDemo";
 
 const filename = fileURLToPath(import.meta.url);
@@ -53,7 +54,7 @@ export default buildConfig({
     NewsletterSubscribers,
   ],
   globals: [Homepage, SiteSettings, AdvertisementSettings, AISettings],
-  endpoints: [seedDemoEndpoint],
+  endpoints: [seedDemoEndpoint, batchUploadEndpoint],
   editor: lexicalEditor(),
   db: postgresAdapter({
     push: process.env.PAYLOAD_SCHEMA_PUSH === "true",
