@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Payload intentionally does not push database schema changes while NODE_ENV is
-# production. Allow a one-time, explicitly opted-in schema bootstrap for a new
-# database. Remove PAYLOAD_SCHEMA_PUSH after the first successful deployment.
+# Bootstrap a brand-new production database only when explicitly requested.
+# Payload's generate:types command does not create PostgreSQL tables, so create
+# and run an initial migration instead. Remove PAYLOAD_SCHEMA_PUSH after the
+# first successful deployment.
 if [[ "${PAYLOAD_SCHEMA_PUSH:-}" == "true" ]]; then
-  echo "Bootstrapping Payload database schema..."
-  NODE_ENV=development payload generate:types
+  echo "Creating initial Payload database migration..."
+  payload migrate:create initial-schema --skip-empty
+  echo "Applying Payload database migrations..."
+  payload migrate
 fi
 
 payload generate:types
