@@ -17,7 +17,11 @@ export const Users: CollectionConfig = {
   access: {
     create: adminsOnly,
     delete: adminsOnly,
-    read: adminsOnly,
+    read: ({ req }) => {
+      const user = req.user as { id?: string | number; role?: string } | null;
+      if (user?.role === "admin") return true;
+      return user?.id ? { id: { equals: user.id } } : false;
+    },
     update: ({ req, id }) => {
       const user = req.user as { id?: string | number; role?: string } | null;
       return user?.role === "admin" || String(user?.id) === String(id);
@@ -31,6 +35,10 @@ export const Users: CollectionConfig = {
       required: true,
       defaultValue: "author",
       saveToJWT: true,
+      access: {
+        create: ({ req }) => (req.user as { role?: string } | null)?.role === "admin",
+        update: ({ req }) => (req.user as { role?: string } | null)?.role === "admin",
+      },
       options: [
         { label: "Administrator", value: "admin" },
         { label: "Editor", value: "editor" },
