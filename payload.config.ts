@@ -54,6 +54,7 @@ export default buildConfig({
   globals: [Homepage, SiteSettings, AdvertisementSettings, AISettings],
   editor: lexicalEditor(),
   db: postgresAdapter({
+    push: process.env.PAYLOAD_SCHEMA_PUSH === "true",
     pool: {
       connectionString:
         process.env.DATABASE_URL ?? "postgres://payload:payload@127.0.0.1:5432/wallpaper_studio",
