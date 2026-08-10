@@ -1,201 +1,49 @@
 "use client";
 
 import { ChangeEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 
 type RelationOption = { id: number; name: string; slug: string };
-
 type SeoPreset = {
-  title: string;
-  slug: string;
-  description: string;
-  alt: string;
-  tags: string[];
-  palette: string;
-  focusKeyword: string;
-  metaTitle: string;
-  metaDescription: string;
-  pinterestTitle: string;
-  pinterestDescription: string;
+  title: string; slug: string; description: string; alt: string; tags: string[]; palette: string;
+  focusKeyword: string; metaTitle: string; metaDescription: string; pinterestTitle: string;
+  pinterestDescription: string; suggestedCategory?: string;
 };
-
+type UploadStatus = "analyzing" | "ready" | "uploading" | "done" | "skipped" | "error";
 type UploadItem = SeoPreset & {
-  id: string;
-  file: File;
-  preview: string;
-  status: "ready" | "uploading" | "done" | "skipped" | "error";
-  message?: string;
-  categoryId?: number;
-  collectionIds?: number[];
-};
-
-const PRESETS: Record<number, SeoPreset> = {
-  1: {
-    title: "Tropical Waterfall in Green Rainforest Phone Wallpaper",
-    slug: "tropical-waterfall-green-rainforest-wallpaper",
-    description: "A peaceful tropical waterfall flowing into a crystal-clear emerald pool, surrounded by lush rainforest greenery and soft natural light. A calming vertical nature wallpaper for phones.",
-    alt: "Tropical waterfall flowing into a clear green rainforest pool",
-    tags: ["waterfall wallpaper", "rainforest", "tropical nature", "green wallpaper", "phone background"],
-    palette: "emerald green, turquoise, white",
-    focusKeyword: "tropical waterfall wallpaper",
-    metaTitle: "Tropical Waterfall Rainforest Phone Wallpaper",
-    metaDescription: "Download a peaceful tropical waterfall phone wallpaper with lush rainforest greenery and a crystal-clear emerald pool.",
-    pinterestTitle: "Tropical Waterfall in Green Rainforest Wallpaper",
-    pinterestDescription: "Refresh your phone with a peaceful tropical waterfall, lush rainforest greenery and a crystal-clear emerald pool. Save this calming vertical nature wallpaper.",
-  },
-  2: {
-    title: "Full Moon Lake and Fireflies Night Phone Wallpaper",
-    slug: "full-moon-lake-fireflies-night-wallpaper",
-    description: "A luminous full moon reflected across a quiet blue lake while tiny fireflies glow between shadowy trees. This dreamy vertical night wallpaper brings calm moonlit atmosphere to your phone.",
-    alt: "Full moon reflected on a quiet lake with glowing fireflies",
-    tags: ["moon wallpaper", "night lake", "fireflies", "blue wallpaper", "phone background"],
-    palette: "midnight blue, silver, teal",
-    focusKeyword: "full moon lake wallpaper",
-    metaTitle: "Full Moon Lake and Fireflies Phone Wallpaper",
-    metaDescription: "Download a dreamy full moon lake wallpaper with silver reflections, deep blue trees and glowing fireflies for your phone.",
-    pinterestTitle: "Full Moon Lake and Fireflies Night Wallpaper",
-    pinterestDescription: "A peaceful moonlit lake, silver reflections and glowing fireflies create the perfect dreamy night phone background. Save this calming nature wallpaper.",
-  },
-  3: {
-    title: "Golden Sunrise Over Misty Mountains Phone Wallpaper",
-    slug: "golden-sunrise-misty-mountains-wallpaper",
-    description: "Golden sunrise light breaks over dramatic mountain peaks and a winding ridge trail above soft clouds. A cinematic vertical mountain wallpaper for an inspiring phone background.",
-    alt: "Golden sunrise over misty mountain peaks and a ridge trail",
-    tags: ["mountain wallpaper", "sunrise", "misty mountains", "golden hour", "phone background"],
-    palette: "gold, slate blue, warm gray",
-    focusKeyword: "sunrise mountain wallpaper",
-    metaTitle: "Golden Sunrise Misty Mountains Phone Wallpaper",
-    metaDescription: "Download a cinematic sunrise mountain wallpaper with golden light, misty peaks and an inspiring ridge trail for your phone.",
-    pinterestTitle: "Golden Sunrise Over Misty Mountains Wallpaper",
-    pinterestDescription: "Start every day with golden sunrise light, dramatic misty peaks and a cinematic mountain trail. Save this inspiring vertical phone wallpaper.",
-  },
-  4: {
-    title: "Magical Purple Sunset River Fantasy Phone Wallpaper",
-    slug: "magical-purple-sunset-river-wallpaper",
-    description: "A glowing turquoise river winds through a purple mountain valley beneath a vivid pink and violet sunset. A magical fantasy-inspired landscape wallpaper designed for vertical phone screens.",
-    alt: "Glowing river through purple mountains beneath a vivid sunset",
-    tags: ["purple wallpaper", "sunset river", "fantasy landscape", "mountain valley", "phone background"],
-    palette: "violet, magenta, turquoise",
-    focusKeyword: "purple sunset river wallpaper",
-    metaTitle: "Magical Purple Sunset River Phone Wallpaper",
-    metaDescription: "Download a magical purple sunset river wallpaper with turquoise water, violet mountains and a dreamy fantasy atmosphere.",
-    pinterestTitle: "Magical Purple Sunset River Fantasy Wallpaper",
-    pinterestDescription: "A glowing turquoise river meets violet mountains and a dreamy pink sunset. Save this magical fantasy landscape as your next vertical phone wallpaper.",
-  },
-  5: {
-    title: "Mountain Lake Sunrise Reflection Phone Wallpaper",
-    slug: "mountain-lake-sunrise-reflection-wallpaper",
-    description: "Warm sunrise colors illuminate a rugged mountain and reflect across a still alpine lake framed by pine trees and wildflowers. A crisp scenic phone wallpaper for nature lovers.",
-    alt: "Sunrise mountain reflected in a calm alpine lake",
-    tags: ["mountain lake wallpaper", "sunrise reflection", "alpine scenery", "nature wallpaper", "phone background"],
-    palette: "peach, blue, forest green",
-    focusKeyword: "mountain lake sunrise wallpaper",
-    metaTitle: "Mountain Lake Sunrise Reflection Phone Wallpaper",
-    metaDescription: "Download a scenic mountain lake sunrise wallpaper with warm reflections, pine trees and peaceful alpine beauty.",
-    pinterestTitle: "Mountain Lake Sunrise Reflection Wallpaper",
-    pinterestDescription: "Warm sunrise colors reflect across a peaceful alpine lake beneath a dramatic mountain peak. Save this crisp nature phone wallpaper for daily inspiration.",
-  },
-  6: {
-    title: "Moonlit Hillside Village Stairway Phone Wallpaper",
-    slug: "moonlit-hillside-village-stairway-wallpaper",
-    description: "A lantern-lit stone stairway climbs through a flower-filled hillside village beneath a dreamy moonlit sky. This enchanting vertical wallpaper blends cozy cottage atmosphere with magical night scenery.",
-    alt: "Lantern-lit village stairway with flowers beneath a moonlit sky",
-    tags: ["village wallpaper", "moonlit night", "cottage scenery", "flower stairway", "phone background"],
-    palette: "teal, amber, garden green",
-    focusKeyword: "moonlit village wallpaper",
-    metaTitle: "Moonlit Hillside Village Stairway Wallpaper",
-    metaDescription: "Download an enchanting moonlit village wallpaper with a lantern-lit stone stairway, flowers and cozy hillside homes.",
-    pinterestTitle: "Moonlit Hillside Village Stairway Wallpaper",
-    pinterestDescription: "Walk into a dreamy hillside village where warm lanterns, flower-lined steps and a moonlit sky create a cozy magical phone background.",
-  },
-  7: {
-    title: "Sunny Alpine Valley and Waterfall Phone Wallpaper",
-    slug: "sunny-alpine-valley-waterfall-wallpaper",
-    description: "Sunbeams pour into a green alpine valley where a clear stream and small waterfalls flow between wildflowers beneath towering peaks. A bright and refreshing vertical nature wallpaper.",
-    alt: "Sunny green alpine valley with stream waterfalls and wildflowers",
-    tags: ["alpine valley wallpaper", "waterfall", "mountain meadow", "sunbeams", "phone background"],
-    palette: "fresh green, sky blue, sunlight gold",
-    focusKeyword: "alpine valley waterfall wallpaper",
-    metaTitle: "Sunny Alpine Valley Waterfall Phone Wallpaper",
-    metaDescription: "Download a sunny alpine valley wallpaper with clear waterfalls, green meadows, wildflowers and dramatic mountain peaks.",
-    pinterestTitle: "Sunny Alpine Valley and Waterfall Wallpaper",
-    pinterestDescription: "Bright sunbeams, clear waterfalls, green meadows and towering alpine peaks make this a refreshing nature wallpaper for your phone.",
-  },
-  8: {
-    title: "Golden Autumn Forest Path Phone Wallpaper",
-    slug: "golden-autumn-forest-path-wallpaper",
-    description: "A quiet woodland path covered in orange leaves glows beneath warm sunbeams filtering through tall autumn trees. A cozy vertical forest wallpaper with rich seasonal color.",
-    alt: "Golden autumn forest path covered in orange leaves and sunbeams",
-    tags: ["autumn wallpaper", "forest path", "fall leaves", "golden forest", "phone background"],
-    palette: "burnt orange, gold, warm brown",
-    focusKeyword: "autumn forest path wallpaper",
-    metaTitle: "Golden Autumn Forest Path Phone Wallpaper",
-    metaDescription: "Download a cozy golden autumn forest wallpaper with warm sunbeams, orange leaves and a peaceful woodland path.",
-    pinterestTitle: "Golden Autumn Forest Path Wallpaper",
-    pinterestDescription: "Warm sunlight streams through tall trees onto a peaceful path covered in golden-orange leaves. Save this cozy autumn phone wallpaper.",
-  },
-  9: {
-    title: "Emerald Pine Forest Lake Phone Wallpaper",
-    slug: "emerald-pine-forest-lake-wallpaper",
-    description: "A hidden emerald lake shines through towering pine trees with misty mountain peaks in the distance. This immersive vertical wallpaper captures the quiet beauty of a deep forest escape.",
-    alt: "Hidden emerald lake surrounded by pine forest and misty mountains",
-    tags: ["pine forest wallpaper", "emerald lake", "mountain forest", "green nature", "phone background"],
-    palette: "deep green, emerald, mist blue",
-    focusKeyword: "pine forest lake wallpaper",
-    metaTitle: "Emerald Pine Forest Lake Phone Wallpaper",
-    metaDescription: "Download an emerald pine forest lake wallpaper with towering trees, misty mountains and a peaceful hidden nature escape.",
-    pinterestTitle: "Emerald Pine Forest Lake Wallpaper",
-    pinterestDescription: "Escape into a deep pine forest where an emerald lake glows beneath misty mountain peaks. Save this immersive green nature wallpaper for your phone.",
-  },
-  10: {
-    title: "Cherry Blossoms and Mount Fuji Phone Wallpaper",
-    slug: "cherry-blossoms-mount-fuji-wallpaper",
-    description: "Pink cherry blossoms frame a peaceful path leading toward Mount Fuji beneath a soft pastel sky. A serene Japanese spring landscape wallpaper made for vertical phone screens.",
-    alt: "Pink cherry blossoms framing Mount Fuji and a peaceful spring path",
-    tags: ["cherry blossom wallpaper", "Mount Fuji", "Japan scenery", "sakura", "phone background"],
-    palette: "sakura pink, lavender, mountain blue",
-    focusKeyword: "cherry blossoms Mount Fuji wallpaper",
-    metaTitle: "Cherry Blossoms Mount Fuji Phone Wallpaper",
-    metaDescription: "Download a serene cherry blossom and Mount Fuji wallpaper with a peaceful spring path and soft pastel Japanese scenery.",
-    pinterestTitle: "Cherry Blossoms and Mount Fuji Wallpaper",
-    pinterestDescription: "Pink sakura blossoms frame a peaceful path toward Mount Fuji beneath a dreamy pastel sky. Save this serene Japanese spring phone wallpaper.",
-  },
+  id: string; file: File; preview: string; status: UploadStatus; message?: string;
+  categoryId?: number; useCollections: boolean; collectionIds: number[]; url?: string;
 };
 
 function slugify(value: string) {
-  return value.toLowerCase().replace(/\.[^.]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return value.toLowerCase().replace(/\.[^.]+$/, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 120);
 }
 
-function presetFor(file: File): SeoPreset {
-  const match = file.name.match(/\((\d+)\)\.(?:png|jpe?g|webp)$/i);
-  const preset = match ? PRESETS[Number(match[1])] : undefined;
-  if (preset) return preset;
-  const base = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").trim();
-  const title = `${base || "Nature Landscape"} Phone Wallpaper`;
+function fallbackSEO(file: File): SeoPreset {
+  const base = file.name.replace(/\.[^.]+$/, "").replace(/[-_]+/g, " ").replace(/\s+/g, " ").trim();
+  const subject = base && !/^(img|image|photo|wallpaper)[-_ ]?\d*$/i.test(base) ? base : "Original Scenic 4K";
+  const title = `${subject} Wallpaper`;
   return {
-    title,
-    slug: slugify(title),
-    description: `A high-quality vertical nature wallpaper featuring ${base.toLowerCase() || "a scenic landscape"}, created for a clean and immersive phone background.`,
-    alt: `${base || "Scenic nature landscape"} vertical phone wallpaper`,
-    tags: ["nature wallpaper", "phone wallpaper", "vertical background"],
-    palette: "natural colors",
-    focusKeyword: `${base.toLowerCase() || "nature"} wallpaper`,
-    metaTitle: title.slice(0, 60),
-    metaDescription: `Download this high-quality ${base.toLowerCase() || "nature"} phone wallpaper for a clean vertical background.`.slice(0, 160),
-    pinterestTitle: title,
-    pinterestDescription: `Save this high-quality ${base.toLowerCase() || "nature"} vertical wallpaper for a fresh phone background.`,
+    title, slug: slugify(title),
+    description: `An original high-quality wallpaper featuring ${subject.toLowerCase()}, prepared for phone and desktop backgrounds.`,
+    alt: `${subject} wallpaper`, tags: ["4K wallpaper", "phone wallpaper", "desktop background"],
+    palette: "AI analysis pending", focusKeyword: `${subject.toLowerCase()} wallpaper`,
+    metaTitle: title.slice(0, 60), metaDescription: `Download this original ${subject.toLowerCase()} wallpaper for phone and desktop.`.slice(0, 160),
+    pinterestTitle: title.slice(0, 100), pinterestDescription: `Save this original ${subject.toLowerCase()} wallpaper for a fresh phone or desktop background.`,
   };
 }
 
-async function optimizeImage(file: File) {
+async function optimizeImage(file: File, maxDimension = 2560, quality = 0.9) {
   const image = await createImageBitmap(file);
+  const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
   const canvas = document.createElement("canvas");
-  canvas.width = image.width;
-  canvas.height = image.height;
+  canvas.width = Math.max(1, Math.round(image.width * scale));
+  canvas.height = Math.max(1, Math.round(image.height * scale));
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Your browser could not prepare this image.");
-  context.drawImage(image, 0, 0);
+  context.drawImage(image, 0, 0, canvas.width, canvas.height);
   image.close();
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", quality));
   if (!blob) throw new Error("Image optimization failed.");
   return { blob, width: canvas.width, height: canvas.height };
 }
@@ -209,66 +57,130 @@ function toBase64(blob: Blob) {
   });
 }
 
+const fieldStyle = { width: "100%", border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 11 } as const;
+const labelStyle = { color: "#8fa3af", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" } as const;
+
 export default function BatchUploadPage() {
   const [items, setItems] = useState<UploadItem[]>([]);
   const [running, setRunning] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
   const [categories, setCategories] = useState<RelationOption[]>([]);
   const [collections, setCollections] = useState<RelationOption[]>([]);
   const [defaultCategoryId, setDefaultCategoryId] = useState<number>();
+  const [defaultUseCollections, setDefaultUseCollections] = useState(false);
   const [defaultCollectionIds, setDefaultCollectionIds] = useState<number[]>([]);
   const [optionsError, setOptionsError] = useState("");
-  const complete = useMemo(() => items.filter((item) => item.status === "done" || item.status === "skipped").length, [items]);
+  const [aiConfigured, setAIConfigured] = useState(false);
+  const [aiMessage, setAIMessage] = useState("Checking Google AI Studio connection…");
+  const uploaded = useMemo(() => items.filter((item) => item.status === "done").length, [items]);
+  const skipped = useMemo(() => items.filter((item) => item.status === "skipped").length, [items]);
 
   useEffect(() => {
-    fetch("/cms-api/batch-upload", { credentials: "include" })
-      .then(async (response) => {
+    Promise.all([
+      fetch("/cms-api/batch-upload", { credentials: "include" }).then(async (response) => {
         const result = await response.json();
         if (!response.ok) throw new Error(result.error ?? "Could not load categories and collections.");
         setCategories(result.categories ?? []);
         setCollections(result.collections ?? []);
         const nature = (result.categories ?? []).find((item: RelationOption) => item.slug === "nature");
         if (nature) setDefaultCategoryId(nature.id);
-      })
-      .catch((error) => setOptionsError(error instanceof Error ? error.message : "Could not load categories and collections."));
+      }),
+      fetch("/cms-api/ai/status", { credentials: "include" }).then(async (response) => {
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error ?? "Could not check AI settings.");
+        setAIConfigured(Boolean(result.configured && result.enabled));
+        setAIMessage(result.configured && result.enabled ? "Google AI is connected. Every selected image will be analyzed automatically." : "Google AI is not connected yet. Add the API key in AI wallpaper settings; uploads can still use editable fallback SEO.");
+      }),
+    ]).catch((error) => setOptionsError(error instanceof Error ? error.message : "Could not load uploader settings."));
   }, []);
+
+  function matchCategory(name?: string) {
+    if (!name) return undefined;
+    const wanted = name.toLowerCase();
+    return categories.find((category) => category.name.toLowerCase() === wanted || category.slug === slugify(wanted))?.id;
+  }
+
+  async function analyzeOne(item: UploadItem) {
+    setItems((current) => current.map((entry) => entry.id === item.id ? { ...entry, status: "analyzing", message: "AI is analyzing the image and writing SEO…" } : entry));
+    try {
+      const optimized = await optimizeImage(item.file, 1280, 0.78);
+      const base64 = await toBase64(optimized.blob);
+      const response = await fetch("/cms-api/ai/analyze-image", {
+        method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+        body: JSON.stringify({ base64, mimeType: "image/webp" }),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "AI analysis failed.");
+      setItems((current) => current.map((entry) => entry.id === item.id ? {
+        ...entry, ...result.seo, categoryId: matchCategory(result.seo.suggestedCategory) ?? entry.categoryId,
+        status: "ready", message: "AI SEO ready — review or publish.",
+      } : entry));
+    } catch (error) {
+      setItems((current) => current.map((entry) => entry.id === item.id ? {
+        ...entry, status: "ready", message: `${error instanceof Error ? error.message : "AI analysis failed."} Fallback SEO is ready and editable.`,
+      } : entry));
+    }
+  }
+
+  async function analyzeAll(selected: UploadItem[]) {
+    if (!aiConfigured || !selected.length) return;
+    setAnalyzing(true);
+    for (const item of selected) await analyzeOne(item);
+    setAnalyzing(false);
+  }
 
   function selectFiles(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []).slice(0, 20);
-    setItems(files.map((file) => ({ ...presetFor(file), id: `${file.name}-${file.lastModified}`, file, preview: URL.createObjectURL(file), status: "ready", categoryId: defaultCategoryId, collectionIds: defaultCollectionIds })));
+    const selected = files.map((file, index): UploadItem => ({
+      ...fallbackSEO(file), id: `${file.name}-${file.size}-${file.lastModified}-${index}`, file,
+      preview: URL.createObjectURL(file), status: aiConfigured ? "analyzing" : "ready",
+      message: aiConfigured ? "Waiting for AI analysis…" : "Fallback SEO ready — connect Google AI for visual analysis.",
+      categoryId: defaultCategoryId, useCollections: defaultUseCollections,
+      collectionIds: defaultUseCollections ? defaultCollectionIds : [],
+    }));
+    setItems(selected);
+    void analyzeAll(selected);
+    event.target.value = "";
   }
 
-  function applyDefaults(categoryId: number | undefined, collectionIds: number[]) {
-    setItems((current) => current.map((item) => item.status === "done" ? item : { ...item, categoryId, collectionIds }));
+  function applyDefaults(categoryId: number | undefined, useCollections: boolean, collectionIds: number[]) {
+    setItems((current) => current.map((item) => ["done", "skipped"].includes(item.status) ? item : {
+      ...item, categoryId, useCollections, collectionIds: useCollections ? collectionIds : [],
+    }));
   }
 
-  function updateRelations(id: string, categoryId: number | undefined, collectionIds: number[]) {
-    setItems((current) => current.map((item) => item.id === id ? { ...item, categoryId, collectionIds } : item));
+  function updateItem(id: string, values: Partial<UploadItem>) {
+    setItems((current) => current.map((item) => item.id === id ? { ...item, ...values } : item));
   }
 
   function updateTitle(id: string, title: string) {
-    setItems((current) => current.map((item) => item.id === id ? { ...item, title, slug: slugify(title), metaTitle: title.slice(0, 60), pinterestTitle: title.slice(0, 100) } : item));
+    updateItem(id, { title, slug: slugify(title), metaTitle: title.slice(0, 60), pinterestTitle: title.slice(0, 100) });
   }
 
   async function uploadAll() {
-    if (!items.length || running) return;
+    if (!items.length || running || analyzing) return;
     setRunning(true);
     for (const selected of items) {
       if (["done", "skipped"].includes(selected.status)) continue;
-      setItems((current) => current.map((item) => item.id === selected.id ? { ...item, status: "uploading", message: "Optimizing and uploading…" } : item));
+      updateItem(selected.id, { status: "uploading", message: "Uploading to media storage and verifying CMS record…" });
       try {
         const optimized = await optimizeImage(selected.file);
         const base64 = await toBase64(optimized.blob);
         const response = await fetch("/cms-api/batch-upload", {
-          method: "POST",
-          credentials: "include",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ ...selected, file: undefined, preview: undefined, status: undefined, id: undefined, filename: selected.file.name, mimeType: "image/webp", base64, width: optimized.width, height: optimized.height }),
+          method: "POST", credentials: "include", headers: { "content-type": "application/json" },
+          body: JSON.stringify({ ...selected, file: undefined, preview: undefined, status: undefined, id: undefined,
+            filename: selected.file.name, mimeType: "image/webp", base64, width: optimized.width, height: optimized.height,
+            collectionIds: selected.useCollections ? selected.collectionIds : [],
+          }),
         });
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error ?? "Upload failed.");
-        setItems((current) => current.map((item) => item.id === selected.id ? { ...item, status: result.skipped ? "skipped" : "done", message: result.skipped ? "Already exists — skipped safely." : "Published with SEO." } : item));
+        if (!response.ok || !result.verified) throw new Error(result.error ?? "CMS could not verify the published wallpaper.");
+        updateItem(selected.id, {
+          status: result.skipped ? "skipped" : "done", slug: result.slug ?? selected.slug, url: result.url,
+          message: result.skipped ? "Exact same image was already published — no false upload count." : result.message ?? "Published and verified on the website.",
+        });
       } catch (error) {
-        setItems((current) => current.map((item) => item.id === selected.id ? { ...item, status: "error", message: error instanceof Error ? error.message : "Upload failed." } : item));
+        updateItem(selected.id, { status: "error", message: error instanceof Error ? error.message : "Upload failed." });
       }
     }
     setRunning(false);
@@ -276,70 +188,67 @@ export default function BatchUploadPage() {
 
   return (
     <main style={{ minHeight: "100vh", padding: "40px 20px 80px", background: "#050b10", color: "#f6fbff" }}>
-      <section style={{ width: "min(1120px, 100%)", margin: "0 auto" }}>
-        <p className="eyebrow">Administrator utility</p>
+      <section style={{ width: "min(1180px, 100%)", margin: "0 auto" }}>
+        <p className="eyebrow">AI administrator utility</p>
         <h1 style={{ marginTop: 12, fontSize: "clamp(34px, 5vw, 58px)", letterSpacing: "-0.04em" }}>Batch upload wallpapers</h1>
-        <p style={{ marginTop: 14, maxWidth: 760, color: "#9fb0bb", lineHeight: 1.7 }}>Select up to 20 original images, choose their category and collections, then publish them with complete search and Pinterest SEO.</p>
+        <p style={{ marginTop: 14, maxWidth: 800, color: "#9fb0bb", lineHeight: 1.7 }}>Select up to 20 original images. Google AI analyzes each image, prepares accurate SEO, and the uploader verifies that every new wallpaper is actually published.</p>
 
-        <div style={{ marginTop: 26, padding: 18, border: "1px solid #20313b", borderRadius: 16, background: "#09131a", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 16 }}>
-          <label style={{ color: "#9fb0bb", fontSize: 13, fontWeight: 700 }}>
-            Category — apply to all
-            <select value={defaultCategoryId ?? ""} onChange={(event) => { const value = event.target.value ? Number(event.target.value) : undefined; setDefaultCategoryId(value); applyDefaults(value, defaultCollectionIds); }} style={{ marginTop: 8, width: "100%", border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 11 }}>
-              <option value="">Select a category</option>
-              {categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
+        <div style={{ marginTop: 22, padding: 16, border: `1px solid ${aiConfigured ? "#2f6149" : "#5a4b27"}`, borderRadius: 14, background: aiConfigured ? "#0a1a15" : "#18150c", color: "#c8d5dc", display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" }}>
+          <span>{aiMessage}</span>
+          <span style={{ display: "flex", gap: 14 }}><Link href="/studio/globals/ai-settings" style={{ color: "#e6ff45", fontWeight: 800 }}>AI settings</Link><Link href="/ai-studio" style={{ color: "#75ddff", fontWeight: 800 }}>Open AI Studio</Link></span>
+        </div>
+
+        <div style={{ marginTop: 22, padding: 18, border: "1px solid #20313b", borderRadius: 16, background: "#09131a", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 18 }}>
+          <label style={{ color: "#9fb0bb", fontSize: 13, fontWeight: 700 }}>Category — apply to all
+            <select value={defaultCategoryId ?? ""} onChange={(event) => { const value = event.target.value ? Number(event.target.value) : undefined; setDefaultCategoryId(value); applyDefaults(value, defaultUseCollections, defaultCollectionIds); }} style={{ ...fieldStyle, marginTop: 8 }}>
+              <option value="">Select a category</option>{categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
             </select>
           </label>
-          <label style={{ color: "#9fb0bb", fontSize: 13, fontWeight: 700 }}>
-            Collections — apply to all
-            <select multiple value={defaultCollectionIds.map(String)} onChange={(event) => { const values = Array.from(event.target.selectedOptions, (option) => Number(option.value)); setDefaultCollectionIds(values); applyDefaults(defaultCategoryId, values); }} style={{ marginTop: 8, width: "100%", minHeight: 92, border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 11 }}>
+          <div>
+            <label style={{ display: "flex", gap: 10, alignItems: "center", color: "#f6fbff", fontWeight: 800 }}>
+              <input type="checkbox" checked={defaultUseCollections} onChange={(event) => { const checked = event.target.checked; setDefaultUseCollections(checked); applyDefaults(defaultCategoryId, checked, defaultCollectionIds); }} />
+              Add to collection(s) — optional
+            </label>
+            {defaultUseCollections ? <select aria-label="Collections apply to all" multiple value={defaultCollectionIds.map(String)} onChange={(event) => { const values = Array.from(event.target.selectedOptions, (option) => Number(option.value)); setDefaultCollectionIds(values); applyDefaults(defaultCategoryId, true, values); }} style={{ ...fieldStyle, marginTop: 10, minHeight: 96 }}>
               {collections.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-            </select>
-            <span style={{ display: "block", marginTop: 6, color: "#748893", fontWeight: 400 }}>Ctrl/Cmd dabakar multiple collections select karein.</span>
-          </label>
+            </select> : <p style={{ marginTop: 10, color: "#748893", fontSize: 13 }}>Off — images will publish without any collection.</p>}
+          </div>
         </div>
         {optionsError && <p style={{ marginTop: 12, color: "#ff8c8c" }}>{optionsError}</p>}
 
         <div style={{ marginTop: 28, display: "flex", flexWrap: "wrap", gap: 12, alignItems: "center" }}>
-          <label style={{ display: "inline-flex", cursor: "pointer", padding: "13px 18px", borderRadius: 999, background: "#e6ff45", color: "#071017", fontWeight: 800 }}>
-            Select images
+          <label style={{ display: "inline-flex", cursor: "pointer", padding: "13px 18px", borderRadius: 999, background: "#e6ff45", color: "#071017", fontWeight: 800 }}>Select images
             <input type="file" accept="image/png,image/jpeg,image/webp" multiple onChange={selectFiles} style={{ display: "none" }} />
           </label>
-          <button type="button" onClick={uploadAll} disabled={!items.length || running} style={{ border: "1px solid #2a3b46", padding: "13px 18px", borderRadius: 999, background: running ? "#16232b" : "#0d1b23", color: "white", fontWeight: 800, cursor: running ? "wait" : "pointer", opacity: !items.length ? 0.5 : 1 }}>
-            {running ? `Uploading ${complete + 1} of ${items.length}…` : `Publish ${items.length || ""} wallpapers`}
+          <button type="button" onClick={uploadAll} disabled={!items.length || running || analyzing} style={{ border: "1px solid #2a3b46", padding: "13px 18px", borderRadius: 999, background: running || analyzing ? "#16232b" : "#0d1b23", color: "white", fontWeight: 800, cursor: running || analyzing ? "wait" : "pointer", opacity: !items.length ? 0.5 : 1 }}>
+            {analyzing ? "AI analyzing images…" : running ? "Publishing and verifying…" : `Publish ${items.length || ""} wallpapers`}
           </button>
-          {items.length > 0 && <span style={{ color: "#9fb0bb" }}>{complete}/{items.length} complete</span>}
+          {items.length > 0 && <span style={{ color: "#9fb0bb" }}>{uploaded} published{skipped ? ` · ${skipped} exact duplicate${skipped === 1 ? "" : "s"}` : ""}</span>}
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(270px, 1fr))", gap: 18, marginTop: 34 }}>
-          {items.map((item) => (
-            <article key={item.id} style={{ overflow: "hidden", border: "1px solid #20313b", borderRadius: 20, background: "#09131a" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(290px, 1fr))", gap: 18, marginTop: 34 }}>
+          {items.map((item) => {
+            const locked = running || ["done", "skipped"].includes(item.status);
+            return <article key={item.id} style={{ overflow: "hidden", border: "1px solid #20313b", borderRadius: 20, background: "#09131a" }}>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={item.preview} alt="Selected wallpaper preview" style={{ width: "100%", aspectRatio: "9 / 16", objectFit: "cover", display: "block" }} />
               <div style={{ padding: 16 }}>
-                <div style={{ display: "grid", gap: 10, marginBottom: 14 }}>
-                  <label style={{ color: "#8fa3af", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" }}>Category
-                    <select value={item.categoryId ?? ""} disabled={running || item.status === "done"} onChange={(event) => updateRelations(item.id, event.target.value ? Number(event.target.value) : undefined, item.collectionIds ?? [])} style={{ marginTop: 8, width: "100%", border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 10 }}>
-                      <option value="">Select a category</option>
-                      {categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                    </select>
-                  </label>
-                  <label style={{ color: "#8fa3af", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" }}>Collections
-                    <select multiple value={(item.collectionIds ?? []).map(String)} disabled={running || item.status === "done"} onChange={(event) => updateRelations(item.id, item.categoryId, Array.from(event.target.selectedOptions, (option) => Number(option.value)))} style={{ marginTop: 8, width: "100%", minHeight: 78, border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 10 }}>
-                      {collections.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}
-                    </select>
-                  </label>
+                <div style={{ display: "grid", gap: 11, marginBottom: 14 }}>
+                  <label style={labelStyle}>Category<select value={item.categoryId ?? ""} disabled={locked} onChange={(event) => updateItem(item.id, { categoryId: event.target.value ? Number(event.target.value) : undefined })} style={{ ...fieldStyle, marginTop: 8 }}><option value="">Select a category</option>{categories.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label>
+                  <label style={{ display: "flex", gap: 9, alignItems: "center", color: "#c8d5dc", fontSize: 13, fontWeight: 700 }}><input type="checkbox" checked={item.useCollections} disabled={locked} onChange={(event) => updateItem(item.id, { useCollections: event.target.checked, collectionIds: event.target.checked ? item.collectionIds : [] })} />Add this image to collection(s)</label>
+                  {item.useCollections && <select aria-label="Collections" multiple value={item.collectionIds.map(String)} disabled={locked} onChange={(event) => updateItem(item.id, { collectionIds: Array.from(event.target.selectedOptions, (option) => Number(option.value)) })} style={{ ...fieldStyle, minHeight: 82 }}>{collections.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select>}
                 </div>
-                <label style={{ display: "block", color: "#8fa3af", fontSize: 12, fontWeight: 800, textTransform: "uppercase", letterSpacing: ".08em" }}>SEO title</label>
-                <textarea value={item.title} disabled={running || item.status === "done"} onChange={(event) => updateTitle(item.id, event.target.value)} rows={3} style={{ marginTop: 8, width: "100%", resize: "vertical", border: "1px solid #2a3b46", borderRadius: 10, background: "#050b10", color: "white", padding: 11, lineHeight: 1.4 }} />
+                <label style={labelStyle}>SEO title</label>
+                <textarea value={item.title} disabled={locked} onChange={(event) => updateTitle(item.id, event.target.value)} rows={3} style={{ ...fieldStyle, marginTop: 8, resize: "vertical", lineHeight: 1.4 }} />
                 <p style={{ marginTop: 10, fontSize: 12, color: "#748893", overflowWrap: "anywhere" }}>/wallpapers/{item.slug}</p>
-                <p style={{ marginTop: 12, color: item.status === "error" ? "#ff8c8c" : item.status === "done" ? "#b9ff7a" : "#9fb0bb", fontSize: 13 }}>{item.message ?? "SEO ready — review the title if needed."}</p>
+                <p style={{ marginTop: 12, color: item.status === "error" ? "#ff8c8c" : item.status === "done" ? "#b9ff7a" : item.status === "analyzing" ? "#75ddff" : "#9fb0bb", fontSize: 13 }}>{item.message}</p>
+                {item.url && <a href={item.url} target="_blank" rel="noreferrer" style={{ display: "inline-block", marginTop: 10, color: "#e6ff45", fontWeight: 800 }}>View published wallpaper ↗</a>}
+                {aiConfigured && !locked && item.status !== "analyzing" && <button type="button" onClick={() => void analyzeOne(item)} style={{ marginTop: 12, border: 0, background: "transparent", color: "#75ddff", cursor: "pointer", fontWeight: 800 }}>Analyze again with AI</button>}
               </div>
-            </article>
-          ))}
+            </article>;
+          })}
         </div>
-
-        {!items.length && <div style={{ marginTop: 36, padding: "48px 24px", border: "1px dashed #2a3b46", borderRadius: 20, textAlign: "center", color: "#78909c" }}>Your selected wallpapers and generated SEO titles will appear here.</div>}
-        <p style={{ marginTop: 24, color: "#74838d", fontSize: 14 }}>You must be logged into /studio as an Administrator or Editor. Duplicate URL slugs are skipped, so Retry is safe.</p>
+        {!items.length && <div style={{ marginTop: 36, padding: "48px 24px", border: "1px dashed #2a3b46", borderRadius: 20, textAlign: "center", color: "#78909c" }}>Selected images and AI-generated SEO will appear here.</div>}
       </section>
     </main>
   );
