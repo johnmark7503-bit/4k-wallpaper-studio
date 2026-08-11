@@ -13,7 +13,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     getCollectionsData(),
     getBlogPostsData(),
   ]);
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://4kwallpaper.studio";
+  const baseUrl =
+    process.env.NEXT_PUBLIC_SITE_URL || "https://4k-wallpaper-studio.vercel.app";
   const routes = ["", "/explore", "/search", "/categories", "/collections", "/blog", "/tools", "/tools/name-wallpaper", "/tools/gradient-wallpaper", "/tools/screen-resolution", "/about", "/contact", "/advertise", "/privacy", "/terms", "/disclaimer", "/copyright", "/dmca"];
   return [
     ...routes.map((route) => ({ url: `${baseUrl}${route}`, lastModified: new Date("2026-08-02"), changeFrequency: route === "" ? "daily" as const : "weekly" as const, priority: route === "" ? 1 : 0.7 })),
