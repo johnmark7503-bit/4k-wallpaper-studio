@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "r2-cdn-worker/worker-configuration.d.ts",
   ]),
 ]);
 

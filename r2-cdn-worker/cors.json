@@ -1,0 +1,12 @@
+[
+  {
+    "AllowedOrigins": [
+      "https://4k-wallpaper-studio.vercel.app",
+      "http://localhost:3000"
+    ],
+    "AllowedMethods": ["GET", "HEAD", "PUT"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag", "Content-Length"],
+    "MaxAgeSeconds": 3600
+  }
+]

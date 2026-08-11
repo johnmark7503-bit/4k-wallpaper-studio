@@ -38,6 +38,7 @@ yarn-error.log*
 next-env.d.ts
 /dist/
 /.wrangler/
+/r2-cdn-worker/.wrangler/
 /.sites-runtime/
 /app/(payload)/
 /outputs/

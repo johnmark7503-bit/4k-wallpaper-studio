@@ -8,7 +8,10 @@ const dirname = path.dirname(filename);
 
 const nextConfig: NextConfig = {
   images: {
-    localPatterns: [{ pathname: "/cms-api/media/file/**" }],
+    localPatterns: [
+      { pathname: "/cms-api/media/file/**" },
+      { pathname: "/api/media/**" },
+    ],
   },
   turbopack: { root: dirname },
   webpack: (webpackConfig) => {
