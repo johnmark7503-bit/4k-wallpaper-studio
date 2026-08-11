@@ -40,6 +40,11 @@ async function r2Size(key) {
     return Number(result.ContentLength ?? -1);
   } catch (error) {
     if (error?.name === "NotFound" || error?.$metadata?.httpStatusCode === 404) return -1;
+    // Bucket-scoped R2 object tokens can return 403 for a missing key because
+    // they do not expose bucket-list permission. Treat that response as
+    // "missing" here; the subsequent Put/Get verification still fails closed
+    // if the credentials themselves are invalid.
+    if (error?.$metadata?.httpStatusCode === 403) return -1;
     throw error;
   }
 }
